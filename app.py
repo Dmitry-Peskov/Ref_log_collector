@@ -2,6 +2,13 @@ import os
 import re
 
 
+class ThisDirectoryIsNotTheRoot(Exception):
+    """Исключение 'Этот каталог не является корневой папкой ПК "Спринтер"'"""
+
+    def __init__(self, message):
+        super().__init__(message)
+
+
 def is_sys_mailbox(boxname: str) -> bool:
     """
     Проверяет имя папки на соответствие паттерну. Является ли это название - системным ящиком.
@@ -67,6 +74,61 @@ def find_system_mailboxes(root_directory: str) -> list[str]:
     return system_mailboxes
 
 
+def build_paths_to_log_files(root_directory: str, boxes_list: list[str]) -> list[str]:
+    """
+    Построить пути к log-файлам и проверить их существование.
+    Если не будет найдено ни одного log-файла, будет возбуждено исключение, говорящее о том что root_directory не является
+    корневым каталогом ПК "Спринтер"
+
+    :param root_directory: путь к корневому каталогу ПК "Спринтер"
+    :param boxes_list:  список системных ящиков (для сбора файлов protocol_{box}.log и ref_crypto_{box}.log)
+    :return: список валидных путей к log-файлам
+    """
+    print('Идёт построение путей к log-файлам и проверка их существования')
+    log_paths = list()
+    base_path = root_directory + '\\' if root_directory[-1] != '\\' else root_directory
+    logs = (r'log\Referent\Referent.log',
+            r'CPCrypto.ini',
+            r'Referent0.ini',
+            r'referent.ini',
+            r'Referent_Setup.ini',
+            r'log\Referent\Reftransport.log',
+            r'log\FormatCheck\FormatCheck.log',
+            r'DocEngineError.log',
+            r'dbconnection.ini',
+            r'log\ManagedApp\WebModuleSystemConverter.log',
+            r'log\ManagedApp\WebModuleSystem.log',
+            r'log\ManagedApp\MkOnlineProxyNew.log',)
+    for log in logs:
+        log_p = base_path + log
+        if os.path.exists(log_p):
+            log_paths.append(log_p)
+    if len(boxes_list) != 0:
+        for box in boxes_list:
+            box_logs = (fr'log\Referent\protocol_{box}.log',
+                        fr'log\Referent\ref_crypto_{box}.log')
+            for box_log_path in box_logs:
+                if os.path.exists(box_log_path):
+                    log_paths.append(box_log_path)
+    cnt_log = len(log_paths)
+    if cnt_log == 0:
+        raise ThisDirectoryIsNotTheRoot(f'[Ошибка] Каталог {root_directory} не является корневой папкой ПК "Спринтер"')
+    else:
+        print(f'[Инфо] Обнаружено {cnt_log} log-файлов')
+    return log_paths
+
+
 if __name__ == "__main__":
-    root_dir = define_the_root_directory()
-    sys_mailboxes = find_system_mailboxes(root_dir)
+    while True:
+        # получаем путь к каталогу ПК "Спринтер"
+        root_dir = define_the_root_directory()
+        # получаем имена системных ящиков
+        sys_mailboxes = find_system_mailboxes(root_directory=root_dir)
+        # строим пути и проверяем существование log-файлов. Если ни один файл не найден, перезапускаем сессию
+        try:
+            logfile_path = build_paths_to_log_files(root_directory=root_dir, boxes_list=sys_mailboxes)
+        except ThisDirectoryIsNotTheRoot as err:
+            print(err)
+            print('[Инфо] Сеанс был перезапущен. Попробуйте снова.\n')
+            continue
+
