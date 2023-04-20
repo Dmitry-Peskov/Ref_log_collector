@@ -1,5 +1,7 @@
 import os
 import re
+from datetime import datetime
+import shutil
 
 
 class ThisDirectoryIsNotTheRoot(Exception):
@@ -11,7 +13,7 @@ class ThisDirectoryIsNotTheRoot(Exception):
 
 def is_sys_mailbox(boxname: str) -> bool:
     """
-    Проверяет имя папки на соответствие паттерну. Является ли это название - системным ящиком.
+    Проверить имя папки на соответствие паттерну. Является ли это название - системным ящиком.
 
     :param boxname: имя папки
     :return: True / False
@@ -25,7 +27,7 @@ def is_sys_mailbox(boxname: str) -> bool:
 
 def define_the_root_directory() -> str:
     """
-    Предлагает пользователю подтвердить что текущая папка (из которой запущена программа) является корневым каталогом
+    Предложить пользователю подтвердить что текущая папка (из которой запущена программа) является корневым каталогом
     ПК "Спринтер" или указать свой путь до данного каталога.
 
     :return: строка с выбранным путём к корневой папке ПК "Спринтер"
@@ -55,7 +57,7 @@ def define_the_root_directory() -> str:
 
 def find_system_mailboxes(root_directory: str) -> list[str]:
     """
-    Анализирует каталог BOXES и собирает из него название системных ящиков
+    Проанализировать каталог BOXES и собрать из него название системных ящиков
 
     :param root_directory: путь до корневого каталога ПК "Спринтер"
     :return: список содержащий имена системных ящиков
@@ -84,7 +86,7 @@ def build_paths_to_log_files(root_directory: str, boxes_list: list[str]) -> list
     :param boxes_list:  список системных ящиков (для сбора файлов protocol_{box}.log и ref_crypto_{box}.log)
     :return: список валидных путей к log-файлам
     """
-    print('Идёт построение путей к log-файлам и проверка их существования')
+    print('[Инфо] Идёт построение путей к log-файлам и проверка их существования')
     log_paths = list()
     base_path = root_directory + '\\' if root_directory[-1] != '\\' else root_directory
     logs = (r'log\Referent\Referent.log',
@@ -118,6 +120,36 @@ def build_paths_to_log_files(root_directory: str, boxes_list: list[str]) -> list
     return log_paths
 
 
+def create_an_output_folder(root_directory: str) -> tuple[str, str]:
+    """
+    Создать папку для сохранения копий log-файлов и вернуть имя и ссылку на нее.
+    Папка будет создана в директории ПК "Спринтер"
+
+    :param root_directory: директория ПК "Спринтер"
+    :return: имя созданной папки и путь к ней
+    """
+    date = datetime.now()
+    directory_name = f'{date.day}-{date.month}-{date.year}_{date.hour}-{date.minute}_LOG файлы'
+    root = root_directory + '\\' if root_directory[-1] != '\\' else root_directory
+    output_path = root + directory_name
+    if not os.path.exists(output_path):
+        os.mkdir(output_path)
+    else:
+        shutil.rmtree(output_path, ignore_errors=True)
+        os.mkdir(output_path)
+    print(f'[Инфо] По пути {root} создана папка "{directory_name}", в которую будут скопированы файлы')
+    return directory_name, output_path
+
+
+def make_copies_of_files(output_dir: str, file_paths: list):
+    for file in file_paths:
+        if file[-4:] != '.log':
+            shutil.copy(file, output_dir)
+        else:
+            pass
+
+
+# точка входа (запуск программы)
 if __name__ == "__main__":
     while True:
         # получаем путь к каталогу ПК "Спринтер"
@@ -131,4 +163,7 @@ if __name__ == "__main__":
             print(err)
             print('[Инфо] Сеанс был перезапущен. Попробуйте снова.\n')
             continue
-
+        # создать папку для копируемых файлов, получить её название и путь к ней
+        name_out_folder, path_out_folder = create_an_output_folder(root_directory=root_dir)
+        # копируем файлы в созданную папку, если файл .log более 2 Мб, копируем последние 2000 строк из файла
+        make_copies_of_files(output_dir=path_out_folder, file_paths=logfile_path)
