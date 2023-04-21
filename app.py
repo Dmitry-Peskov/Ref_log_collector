@@ -199,6 +199,15 @@ def make_copies_of_files(output_dir: str, file_paths: list[str]) -> None:
 
 
 def pack_in_zip(packaged_catalog: str, archive_name: str, output_calatalog: str) -> None:
+    """
+    Производит упаковку собранных log-файлов в zip архив. Если упаковка прошла успешно, удаляет промежуточную папку,
+    в которую собирались log-файлы. В ином случае предалагет пользователю упаковать папку вручную
+
+    :param packaged_catalog: ссылка на каталог, который будет упакован в архив
+    :param archive_name: имя будущего архива
+    :param output_calatalog: каталог, в который будет произведена запись архива
+    :return: None
+    """
     try:
         os.chdir(output_calatalog)
         shutil.make_archive(base_name=archive_name, format='zip', root_dir=output_calatalog, base_dir=packaged_catalog)
