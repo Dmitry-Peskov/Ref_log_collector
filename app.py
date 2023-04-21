@@ -11,6 +11,20 @@ class ThisDirectoryIsNotTheRoot(Exception):
         super().__init__(message)
 
 
+class ErrorInProgressCopy(Exception):
+    """Исключение 'В процессе копирования log-файлов произошли ошибки'"""
+
+    def __init__(self, message):
+        super().__init__(message)
+
+
+class ErrorInProgressPacking(Exception):
+    """Исключение 'В процессе упаковки в zip произошла ошибка'"""
+
+    def __init__(self, message):
+        super().__init__(message)
+
+
 def is_sys_mailbox(boxname: str) -> bool:
     """
     Проверить имя папки на соответствие паттерну. Является ли это название - системным ящиком.
@@ -141,12 +155,58 @@ def create_an_output_folder(root_directory: str) -> tuple[str, str]:
     return directory_name, output_path
 
 
-def make_copies_of_files(output_dir: str, file_paths: list):
-    for file in file_paths:
-        if file[-4:] != '.log':
-            shutil.copy(file, output_dir)
-        else:
-            pass
+def make_copies_of_files(output_dir: str, file_paths: list[str]) -> None:
+    """
+    Скопировать найденные log-файлы в специально созданную директорию.
+    Если размер файла с расширением .log превышает 2 Мб и количество строк в файле больше 5000
+    , копируются последние 5000 строк из файла.
+
+    :param output_dir: путь к каталогу, в который будут скопированы файлы
+    :param file_paths: список путей к копируемым log-файлам
+    :return: None
+    """
+    cnt_log = len(file_paths)
+    cnt_copy = 0
+    print('[Инфо] Начата процедура копирования')
+    try:
+        for file in file_paths:
+            if file[-4:] != '.log':
+                shutil.copy(file, output_dir)
+                cnt_copy += 1
+            else:
+                size = os.path.getsize(file)
+                if size <= 2_097_152:  # меньше или равно 2 Мб
+                    shutil.copy(file, output_dir)
+                    cnt_copy += 1
+                else:
+                    log_name = file.rsplit('\\')[-1]
+                    copy_file = f'{output_dir}\\{log_name}'
+                    with open(file, 'r') as origin, open(copy_file, 'w') as copy_f:
+                        data = origin.readlines()
+                        cnt_row = len(data)
+                        if cnt_row > 5000:
+                            print(
+                                f'[Инфо] Файл {log_name} более 2 Мб и имеет более 5000 строк. Копирую последние 5000 строк из файла')
+                            end_row = cnt_row - 5000
+                            for row in data[end_row:]:
+                                copy_f.write(row)
+                        else:
+                            shutil.copy(file, output_dir)
+                    cnt_copy += 1
+            print(f'[Инфо] Скопировано {cnt_copy} из {cnt_log} файлов.')
+    except Exception as errors_text:
+        raise ErrorInProgressCopy(f'[Ошибка] в процессе копирования произошли ошибки:\n"{errors_text}"')
+
+
+def pack_in_zip(packaged_catalog: str, archive_name: str, output_calatalog: str) -> None:
+    try:
+        os.chdir(output_calatalog)
+        shutil.make_archive(base_name=archive_name, format='zip', root_dir=output_calatalog, base_dir=packaged_catalog)
+        shutil.rmtree(path_out_folder, ignore_errors=True)
+        print(f'[Инфо] В директории "{output_calatalog}" создан архив {archive_name}.zip')
+        os.chdir(os.getcwd())
+    except Exception as errors_t:
+        raise ErrorInProgressPacking(f'[Ошибка] В процессе упаковки в zip:\n{errors_t}\nПроизведите упаковку каталога "{packaged_catalog}" вручную.')
 
 
 # точка входа (запуск программы)
@@ -165,5 +225,19 @@ if __name__ == "__main__":
             continue
         # создать папку для копируемых файлов, получить её название и путь к ней
         name_out_folder, path_out_folder = create_an_output_folder(root_directory=root_dir)
-        # копируем файлы в созданную папку, если файл .log более 2 Мб, копируем последние 2000 строк из файла
-        make_copies_of_files(output_dir=path_out_folder, file_paths=logfile_path)
+        # копируем файлы в созданную папку, если файл .log более 2 Мб и 5000 строк, копируем последние 5000 строк из файла
+        try:
+            make_copies_of_files(output_dir=path_out_folder, file_paths=logfile_path)
+        except ErrorInProgressCopy as error:
+            print(error)
+            shutil.rmtree(path_out_folder, ignore_errors=True)  # удаляем ранее созданную папку под log-файлы
+            print('[Инфо] Сеанс был перезапущен. Попробуйте снова либо осуществите сбор файлов вручную\n')
+            continue
+        # производим упаковку собранных log-файлов в архив zip и удаление служебной папки, в которую собирали копии файлов
+        try:
+            pack_in_zip(packaged_catalog=path_out_folder, archive_name=name_out_folder, output_calatalog=root_dir)
+        except ErrorInProgressPacking as errors:
+            print(errors)
+        finally:
+            input('[Работа завершена] Нажмите Enter что бы завершить работу программы')
+            break
