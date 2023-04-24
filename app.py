@@ -121,8 +121,8 @@ def build_paths_to_log_files(root_directory: str, boxes_list: list[str]) -> list
             log_paths.append(log_p)
     if len(boxes_list) != 0:
         for box in boxes_list:
-            box_logs = (fr'log\Referent\protocol_{box}.log',
-                        fr'log\Referent\ref_crypto_{box}.log')
+            box_logs = (fr'{base_path}log\Referent\protocol_{box}.log',
+                        fr'{base_path}log\Referent\ref_crypto_{box}.log')
             for box_log_path in box_logs:
                 if os.path.exists(box_log_path):
                     log_paths.append(box_log_path)
